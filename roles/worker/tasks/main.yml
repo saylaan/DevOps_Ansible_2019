@@ -1,0 +1,53 @@
+- name: Starting setup of worker
+  hosts: worker
+  become: yes
+  remote_user: root
+
+  tasks:
+    - name: Check if worker directory exists
+      stat:
+        path: /etc/worker
+      register: workerDir
+    - name: Copying and extracting worker.zip
+      unarchive:
+        src: ../../../worker.zip
+        dest: /etc/
+      when: workerDir.stat.exists == false
+    # - name: Adding java repository
+    # apt_repository:
+    #   repo: deb http://ftp.us.debian.org/debian sid main
+    #   state: present
+    # update_cache: yes
+    - name: Update apt Cache
+      apt:
+        update_cache: yes
+        force_apt_get: yes
+    - name: Installing java and maven
+      apt:
+        name:
+          - default-jre
+          - maven
+        force_apt_get: yes
+    - name: Check if target directory exists
+      stat:
+        path: /etc/worker/target/worker-jar-with-dependencies.jar
+      register: targetDir
+    - name: Resolving dependencies and packaging worker
+      shell: cd /etc/worker && mvn dependency:resolve && mvn clean package
+      when: targetDir.stat.exists == false
+    - name: Adding app to systemd
+      template:
+        src: ../files/worker.service
+        dest: /etc/systemd/system/worker.service
+    - name: Enable worker service
+      systemd:
+        name: worker
+        enabled: yes
+        masked: no
+    - name: Reloading systemd daemon
+      systemd:
+        daemon_reload: yes
+    - name: Starting worker
+      systemd:
+        state: started
+        name: worker

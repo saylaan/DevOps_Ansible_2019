@@ -1,0 +1,58 @@
+- name: Starting setup of Redis
+  hosts: redis
+  become: yes
+  remote_user: root
+
+  tasks:
+    # - name: Check if target directory exists
+    #   stat:
+    #     path: /var/log/redis
+    #   register: redisLogDir
+    # - name: Create directory if not exists
+    #   file:
+    #     path: /var/log/secure
+    #     state: directory
+    #     mode: 0755
+    #     group: redis
+    #     owner: redis
+    #   when: redisLogDir.stat.exists == false
+    - name: Installing Redis
+      apt:
+        name: redis-server
+        update_cache: yes
+    - name: Verifying overcommit_memory
+      lineinfile:
+        dest: /etc/sysctl.conf
+        state: present
+        regexp: "^#vm.overcommit_memory = 1"
+        line: "vm.overcommit_memory = 1"
+    - name: Configuring Redis
+      template:
+        src: ../files/redis.conf
+        dest: /etc/redis/redis.conf
+    - name: Adding Redis to systemd
+      template:
+        src: ../files/redis.service
+        dest: /etc/systemd/system/redis.service
+    - name: Stoping redis-server
+      systemd:
+        state: stopped
+        name: redis-server
+        enabled: no
+        masked: no
+    - name: Enable redis service
+      systemd:
+        name: redis
+        enabled: yes
+        masked: no
+    - name: Starting redis service
+      systemd:
+        state: started
+        name: redis
+    - name: Reloading systemd daemon
+      systemd:
+        daemon_reload: yes
+    - name: Allow port 6379
+      ufw:
+        rule: allow
+        port: "6379"

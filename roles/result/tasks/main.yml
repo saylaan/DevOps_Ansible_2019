@@ -1,0 +1,76 @@
+- name: Starting setup of result
+  hosts: result
+  become: yes
+  remote_user: root
+
+  environment:
+
+  tasks:
+    - name: Install the gpg key for nodejs LTS
+      apt_key:
+        url: "https://deb.nodesource.com/gpgkey/nodesource.gpg.key"
+        state: present
+    - name: Install the nodejs LTS repos
+      apt_repository:
+        repo: "deb https://deb.nodesource.com/node_12.x {{ ansible_distribution_release }} main"
+        state: present
+        update_cache: yes
+    - name: Install nodejs
+      apt:
+        name: nodejs
+        state: present
+    - name: Check if result directory exists
+      stat:
+        path: /etc/result
+      register: resultDir
+    - name: Copying and extracting result.zip
+      unarchive:
+        src: ../../../result.zip
+        dest: /etc/
+      when: resultDir.stat.exists == false
+    - name: Check if node modules directory exists
+      stat:
+        path: /etc/result/node_modules
+      register: nodeDir
+    - name: Updating packages
+      npm:
+        path: /etc/result
+        state: latest
+      when: nodeDir.stat.exists == false
+    # - name: Create group appmanager
+    #   group:
+    #     name: appmanager
+    #     state: present
+    # - name: Create user workerapp
+    #   user:
+    #     name: resultapp
+    #     shell: /bin/false
+    #     groups: appmanager
+    #     append: yes
+    - name: Adding app to systemd
+      template:
+        src: ../files/result.service
+        dest: /etc/systemd/system/result.service
+    # - name: Adding resultapp permissions
+    #   file:
+    #     path: /etc/result
+    #     state: directory
+    #     recurse: yes
+    #     owner: resultapp
+    #     group: appmanager
+    - name: Enabling result
+      systemd:
+        name: result
+        enabled: yes
+        masked: no
+    - name: Realoading daemon
+      systemd:
+        daemon_reload: yes
+    - name: Starting result
+      systemd:
+        state: started
+        name: result
+    - name: Allow port 80
+      ufw:
+        rule: allow
+        port: "80"

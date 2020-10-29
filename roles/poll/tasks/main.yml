@@ -1,0 +1,44 @@
+- name: Starting setup of Poll
+  hosts: poll
+  become: yes
+  remote_user: root
+
+  tasks:
+    - name: Installing pip3 and build essentials
+      apt:
+        name:
+          - build-essential
+    - name: Check if poll directory exists
+      stat:
+        path: /etc/poll/app.py
+      register: pollDir
+    - name: Copying and extracting poll.zip
+      unarchive:
+        src: ../../../poll.zip
+        dest: /etc/
+      when: pollDir.stat.exists == false
+    - name: Installing dependecies via pip
+      pip:
+        requirements: /etc/poll/requirements.txt
+        extra_args: "--no-cache-dir"
+        executable: pip3
+    - name: Adding app to systemd
+      template:
+        src: ../files/poll.service
+        dest: /etc/systemd/system/poll.service
+    - name: Enabling poll
+      systemd:
+        name: poll
+        enabled: yes
+        masked: no
+    - name: Realoading daemon
+      systemd:
+        daemon_reload: yes
+    - name: Starting poll
+      systemd:
+        state: started
+        name: poll
+    - name: Allow port 80
+      ufw:
+        rule: allow
+        port: "80"

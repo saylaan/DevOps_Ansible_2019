@@ -1,0 +1,17 @@
+[Unit]
+Description=Node.js Server
+
+[Service]
+ExecStart=/bin/node /etc/result/server.js
+WorkingDirectory=/etc/result
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=nodejs-result
+User=root
+Group=root
+Environment=NODE_ENV=production PORT={{ result_port }} POSTGRESQL_USER={{ db_user }} POSTGRESQL_PASSWORD={{ db_user_password }} POSTGRESQL_HOST={{ postgres_address }} POSTGRESQL_PORT={{ db_port }} POSTGRESQL_DB={{ db_name }}
+
+[Install]
+WantedBy=multi-user.target

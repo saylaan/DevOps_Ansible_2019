@@ -1,0 +1,19 @@
+[Unit]
+Description=Manage worker service
+
+[Service]
+WorkingDirectory=/etc/worker/target
+ExecStart=/bin/java -Xms128m -Xmx256m -jar worker-jar-with-dependencies.jar
+User=root
+Type=simple
+Restart=always
+RestartSec=10
+Environment="REDIS_HOST={{ redis_address }}"
+Environment="POSTGRESQL_HOST={{ postgres_address }}"
+Environment="POSTGRESQL_PORT={{ db_port }}"
+Environment="POSTGRESQL_DB={{ db_name }}"
+Environment="POSTGRESQL_USER={{ db_user }}"
+Environment="POSTGRESQL_PASSWORD={{ db_user_password }}"
+
+[Install]
+WantedBy=multi-user.target

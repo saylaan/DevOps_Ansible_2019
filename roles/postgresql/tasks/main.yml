@@ -1,0 +1,118 @@
+- name: Starting setup of PostgreSQL
+  hosts: postgres
+  become: yes
+  remote_user: root
+
+  tasks:
+    - name: Adding postgres key
+      apt_key:
+        url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        state: present
+    - name: Adding postgres repository
+      apt_repository:
+        repo: deb http://apt.postgresql.org/pub/repos/apt/ buster-pgdg main
+        state: present
+        update_cache: yes
+    - name: Running apt update
+      apt:
+        name: "*"
+        state: latest
+    - name: Installing postgresql, python-psycopg2 and gnupg2 packages
+      apt:
+        name:
+          - postgresql-12
+          - postgresql-client-12
+          - postgresql-contrib
+          - gnupg2
+          - python-psycopg2
+        update_cache: yes
+    - name: Realoading daemon
+      systemd:
+        daemon_reload: yes
+    - name: Ensure PostgreSQL is started
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+    - name: Importing configs
+      template:
+        src: ../files/pg_hba.conf
+        dest: /etc/postgresql/12/main/pg_hba.conf
+    - name: Make sure listen address is *
+      lineinfile:
+        dest: /etc/postgresql/12/main/postgresql.conf
+        state: present
+        regexp: "^#listen_addresses = 'localhost'"
+        line: "listen_addresses = '*'"
+    - name: Collect PostgreSQL databases
+      become: yes
+      become_user: postgres
+      postgresql_info:
+        filter: databases
+      register: db
+    - name: Creating database 'paul'
+      become: true
+      become_user: postgres
+      postgresql_db:
+        name: "{{ db_name }}"
+    - name: Creating schema in database
+      become: true
+      become_user: postgres
+      postgresql_schema:
+        db: "{{ db_name }}"
+        name: schema_postgres
+    - name: dump a database file
+      copy:
+        dest: /etc/migrate.sql
+        src: ../files/schema.sql
+    - name: Run queries from SQL script
+      become: true
+      become_user: postgres
+      postgresql_query:
+        db: paul
+        path_to_script: /etc/migrate.sql
+        positional_args:
+          - 1
+      when: db.databases.paul is not defined
+    - name: Create user paul and drop permissions
+      become: true
+      become_user: postgres
+      postgresql_user:
+        db: "{{ db_name }}"
+        name: "{{ db_user }}"
+        password: "{{ db_user_password }}"
+        priv: "votes:ALL"
+
+    - name: Allow port 5432
+      ufw:
+        rule: allow
+        port: "5432"
+
+    - name: Realoading daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Ensure PostgreSQL is started
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Set listen_addresses to *
+      become: true
+      become_user: postgres
+      postgresql_set:
+        name: listen_addresses
+        value: "*"
+      register: set
+
+    - name: debug
+      debug:
+        var: db
+
+    - name: Restart PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
+        enabled: yes
+      when: set.changed == true
